@@ -396,6 +396,8 @@ export default function App() {
   const [fmtName, setFmtName]   = useState("");
   const [fmtSaving, setFmtSaving] = useState(false);
   const [fmtMsg, setFmtMsg]     = useState("");
+  const [quickSaving, setQuickSaving] = useState(false);
+  const [quickMsg, setQuickMsg]       = useState("");  // "" | "saved" | "error"
   const [editingFmt, setEditingFmt] = useState(null); // format id being renamed
 
   // ── 認証 ──
@@ -483,6 +485,56 @@ export default function App() {
       loadFormats();
     } catch(e) { setFmtMsg("保存に失敗しました: " + e.message); }
     finally { setFmtSaving(false); }
+  }
+
+  // ── 途中保存（クイックセーブ）──
+  async function quickSave() {
+    setQuickSaving(true); setQuickMsg("");
+    const name = fmtName.trim() || `${form.orgName||"未入力"}の計画書（途中保存）`;
+    try {
+      // 同名の既存フォーマットを探して上書き、なければ新規作成
+      const existing = formats.find(f => f.name === name);
+      if (existing) {
+        await supaFetch(`/rest/v1/drill_formats?id=eq.${existing.id}`, {
+          method: "PATCH",
+          token: session.token,
+          headers: { "Prefer": "return=minimal" },
+          body: JSON.stringify({
+            org_name: form.orgName, org_type: form.orgType, drill_time: form.drillTime,
+            drill_num: form.drillNum, d1: form.d1, d2: form.d2, bias: form.bias,
+            vuln: form.vuln, v_ratio: form.vRatio, power_out: form.powerOut,
+            roles: form.roles, backup: form.backup, ext: form.ext,
+            timeline: form.timeline, ev1: form.ev1, ev2: form.ev2,
+            route_note: form.routeNote, kpis: form.kpis, target_t: form.targetT,
+            debrief: form.debrief, behavior: form.behavior,
+          })
+        });
+      } else {
+        await supaFetch("/rest/v1/drill_formats", {
+          method: "POST",
+          token: session.token,
+          headers: { "Prefer": "return=minimal" },
+          body: JSON.stringify({
+            user_id: session.user.id, name,
+            org_name: form.orgName, org_type: form.orgType, drill_time: form.drillTime,
+            drill_num: form.drillNum, d1: form.d1, d2: form.d2, bias: form.bias,
+            vuln: form.vuln, v_ratio: form.vRatio, power_out: form.powerOut,
+            roles: form.roles, backup: form.backup, ext: form.ext,
+            timeline: form.timeline, ev1: form.ev1, ev2: form.ev2,
+            route_note: form.routeNote, kpis: form.kpis, target_t: form.targetT,
+            debrief: form.debrief, behavior: form.behavior,
+          })
+        });
+      }
+      setQuickMsg("saved");
+      loadFormats();
+      setTimeout(() => setQuickMsg(""), 3000);
+    } catch(e) {
+      setQuickMsg("error");
+      setTimeout(() => setQuickMsg(""), 3000);
+    } finally {
+      setQuickSaving(false);
+    }
   }
 
   // ── フォーマット読み込み（編集）──
@@ -793,16 +845,43 @@ export default function App() {
         </div>
       </div>
 
-      {/* プログレス */}
+      {/* プログレス＋途中保存 */}
       <div className="mb-5">
         <div className="flex justify-between text-sm mb-2">
           <span className="font-semibold text-gray-700">{STEPS[step]}</span>
-          <span className="font-medium text-gray-500">{step+1} / {STEPS.length}</span>
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-gray-500">{step+1} / {STEPS.length}</span>
+            {/* 途中保存ボタン */}
+            <button
+              onClick={quickSave}
+              disabled={quickSaving}
+              title={fmtName.trim() ? `「${fmtName}」として保存` : "途中経過を保存"}
+              className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg border transition-all ${
+                quickMsg==="saved"  ? "border-green-300 bg-green-50 text-green-600" :
+                quickMsg==="error"  ? "border-red-300 bg-red-50 text-red-500" :
+                quickSaving         ? "border-gray-200 text-gray-400 cursor-not-allowed" :
+                "border-sky-200 text-sky-600 hover:bg-sky-50"
+              }`}>
+              {quickSaving ? (
+                <><svg className="animate-spin w-3 h-3" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                </svg>保存中</>
+              ) : quickMsg==="saved" ? "✓ 保存しました" :
+                quickMsg==="error" ? "✗ 保存失敗" : "途中保存"}
+            </button>
+          </div>
         </div>
         <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
           <div className="h-full bg-sky-500 rounded-full transition-all duration-300"
             style={{width:`${((step+1)/STEPS.length)*100}%`}} />
         </div>
+        {/* 保存名インジケーター */}
+        {fmtName.trim() && (
+          <div className="mt-1.5 text-xs text-gray-400 text-right">
+            保存名：<span className="text-sky-600 font-medium">{fmtName}</span>
+          </div>
+        )}
       </div>
 
       {/* ── Step 0 ── */}
