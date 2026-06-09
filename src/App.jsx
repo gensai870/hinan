@@ -1088,15 +1088,37 @@ export default function App() {
         {step>0
           ? <button onClick={()=>setStep(s=>s-1)} className="text-sm text-gray-500 border border-gray-200 px-4 py-2 rounded-lg hover:bg-gray-50">← 戻る</button>
           : <span/>}
-        {isLast
-          ? <button onClick={handleComplete}
-              className="flex items-center gap-2 text-sm text-white px-5 py-2.5 rounded-lg font-medium bg-green-500 hover:bg-green-600">
-              ✓ 計画書を完成させる
+        <div className="flex items-center gap-2">
+          {!isLast && (
+            <button
+              onClick={quickSave}
+              disabled={quickSaving}
+              className={`flex items-center gap-1 text-sm px-3.5 py-2 rounded-lg border transition-all ${
+                quickMsg==="saved" ? "border-green-300 bg-green-50 text-green-600" :
+                quickMsg==="error" ? "border-red-300 bg-red-50 text-red-500" :
+                quickSaving        ? "border-gray-200 text-gray-400 cursor-not-allowed" :
+                "border-sky-200 text-sky-600 hover:bg-sky-50"
+              }`}>
+              {quickSaving ? (
+                <><svg className="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                </svg>保存中</>
+              ) : quickMsg==="saved" ? "✓ 保存しました"
+                : quickMsg==="error" ? "✗ 保存失敗"
+                : "途中保存"}
             </button>
-          : <button onClick={()=>{if(validate())setStep(s=>s+1);}}
-              className="text-sm text-white bg-sky-500 hover:bg-sky-600 px-5 py-2 rounded-lg font-medium">
-              次へ →
-            </button>}
+          )}
+          {isLast
+            ? <button onClick={handleComplete}
+                className="flex items-center gap-2 text-sm text-white px-5 py-2.5 rounded-lg font-medium bg-green-500 hover:bg-green-600">
+                ✓ 計画書を完成させる
+              </button>
+            : <button onClick={()=>{if(validate())setStep(s=>s+1);}}
+                className="text-sm text-white bg-sky-500 hover:bg-sky-600 px-5 py-2 rounded-lg font-medium">
+                次へ →
+              </button>}
+        </div>
       </div>
     </div>
   );
