@@ -4,20 +4,6 @@ import { useState, useEffect, useCallback } from "react";
 const SUPA_URL  = "https://fuggbtoovpjqwudiqkvq.supabase.co";
 const SUPA_KEY  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ1Z2didG9vdnBqcXd1ZGlxa3ZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5ODk0NTYsImV4cCI6MjA5NjU2NTQ1Nn0.gQj6mefELZm-pzNyNDNhEq0yL2p2AkAqg5H7XSIVLWI";
 
-async function supaFetch(path, opts = {}) {
-  const res = await fetch(`${SUPA_URL}${path}`, {
-    ...opts,
-    headers: {
-      "Content-Type": "application/json",
-      "apikey": SUPA_KEY,
-      "Authorization": `Bearer ${opts.token || SUPA_KEY}`,
-      ...(opts.headers || {}),
-    },
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error_description || data.message || JSON.stringify(data));
-  return data;
-}
 
 // ── デフォルト値 ──────────────────────────────────────
 const DEFAULT_ROLES = [
@@ -404,11 +390,11 @@ export default function App() {
   async function doLogin() {
     setAuthLoading(true); setAuthErr("");
     try {
-      const d = await supaFetch("/auth/v1/token?grant_type=password", {
-        method:"POST",
-        body: JSON.stringify({ email: authForm.email, password: authForm.password })
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: authForm.email, password: authForm.password
       });
-      setSession({ token: d.access_token, user: d.user });
+      if (error) throw error;
+      setSession({ token: data.session.access_token, user: data.user });
       setView("app");
     } catch(e) { setAuthErr("メールアドレスまたはパスワードが正しくありません"); }
     finally { setAuthLoading(false); }
@@ -417,10 +403,10 @@ export default function App() {
   async function doRegister() {
     setAuthLoading(true); setAuthErr("");
     try {
-      await supaFetch("/auth/v1/signup", {
-        method:"POST",
-        body: JSON.stringify({ email: authForm.email, password: authForm.password })
+      const { error } = await supabase.auth.signUp({
+        email: authForm.email, password: authForm.password
       });
+      if (error) throw error;
       setAuthErr("確認メールを送信しました。メールのリンクをクリックしてからログインしてください。");
     } catch(e) { setAuthErr(e.message); }
     finally { setAuthLoading(false); }
@@ -435,10 +421,12 @@ export default function App() {
     if (!session) return;
     setFmtLoading(true);
     try {
-      const d = await supaFetch("/rest/v1/drill_formats?select=*&order=updated_at.desc", {
-        token: session.token
-      });
-      setFormats(Array.isArray(d) ? d : []);
+      const { data, error } = await supabase
+        .from("drill_formats")
+        .select("*")
+        .order("updated_at", { ascending: false });
+      if (error) throw error;
+      setFormats(data || []);
     } catch(e) { console.error(e); }
     finally { setFmtLoading(false); }
   }, [session]);
@@ -450,36 +438,17 @@ export default function App() {
     if (!fmtName.trim()) { setFmtMsg("フォーマット名を入力してください"); return; }
     setFmtSaving(true); setFmtMsg("");
     try {
-      await supaFetch("/rest/v1/drill_formats", {
-        method:"POST",
-        token: session.token,
-        headers:{ "Prefer":"return=minimal" },
-        body: JSON.stringify({
-          user_id:    session.user.id,
-          name:       fmtName,
-          org_name:   form.orgName,
-          org_type:   form.orgType,
-          drill_time: form.drillTime,
-          drill_num:  form.drillNum,
-          d1:         form.d1,
-          d2:         form.d2,
-          bias:       form.bias,
-          vuln:       form.vuln,
-          v_ratio:    form.vRatio,
-          power_out:  form.powerOut,
-          roles:      form.roles,
-          backup:     form.backup,
-          ext:        form.ext,
-          timeline:   form.timeline,
-          ev1:        form.ev1,
-          ev2:        form.ev2,
-          route_note: form.routeNote,
-          kpis:       form.kpis,
-          target_t:   form.targetT,
-          debrief:    form.debrief,
-          behavior:   form.behavior,
-        })
+      const { error } = await supabase.from("drill_formats").insert({
+        user_id: session.user.id, name: fmtName,
+        org_name: form.orgName, org_type: form.orgType, drill_time: form.drillTime,
+        drill_num: form.drillNum, d1: form.d1, d2: form.d2, bias: form.bias,
+        vuln: form.vuln, v_ratio: form.vRatio, power_out: form.powerOut,
+        roles: form.roles, backup: form.backup, ext: form.ext,
+        timeline: form.timeline, ev1: form.ev1, ev2: form.ev2,
+        route_note: form.routeNote, kpis: form.kpis, target_t: form.targetT,
+        debrief: form.debrief, behavior: form.behavior,
       });
+      if (error) throw error;
       setFmtMsg(`「${fmtName}」を保存しました`);
       setFmtName("");
       loadFormats();
@@ -491,40 +460,25 @@ export default function App() {
   async function quickSave() {
     setQuickSaving(true); setQuickMsg("");
     const name = fmtName.trim() || `${form.orgName||"未入力"}の計画書（途中保存）`;
+    const payload = {
+      org_name: form.orgName, org_type: form.orgType, drill_time: form.drillTime,
+      drill_num: form.drillNum, d1: form.d1, d2: form.d2, bias: form.bias,
+      vuln: form.vuln, v_ratio: form.vRatio, power_out: form.powerOut,
+      roles: form.roles, backup: form.backup, ext: form.ext,
+      timeline: form.timeline, ev1: form.ev1, ev2: form.ev2,
+      route_note: form.routeNote, kpis: form.kpis, target_t: form.targetT,
+      debrief: form.debrief, behavior: form.behavior,
+    };
     try {
-      // 同名の既存フォーマットを探して上書き、なければ新規作成
       const existing = formats.find(f => f.name === name);
       if (existing) {
-        await supaFetch(`/rest/v1/drill_formats?id=eq.${existing.id}`, {
-          method: "PATCH",
-          token: session.token,
-          headers: { "Prefer": "return=minimal" },
-          body: JSON.stringify({
-            org_name: form.orgName, org_type: form.orgType, drill_time: form.drillTime,
-            drill_num: form.drillNum, d1: form.d1, d2: form.d2, bias: form.bias,
-            vuln: form.vuln, v_ratio: form.vRatio, power_out: form.powerOut,
-            roles: form.roles, backup: form.backup, ext: form.ext,
-            timeline: form.timeline, ev1: form.ev1, ev2: form.ev2,
-            route_note: form.routeNote, kpis: form.kpis, target_t: form.targetT,
-            debrief: form.debrief, behavior: form.behavior,
-          })
-        });
+        const { error } = await supabase.from("drill_formats")
+          .update(payload).eq("id", existing.id);
+        if (error) throw error;
       } else {
-        await supaFetch("/rest/v1/drill_formats", {
-          method: "POST",
-          token: session.token,
-          headers: { "Prefer": "return=minimal" },
-          body: JSON.stringify({
-            user_id: session.user.id, name,
-            org_name: form.orgName, org_type: form.orgType, drill_time: form.drillTime,
-            drill_num: form.drillNum, d1: form.d1, d2: form.d2, bias: form.bias,
-            vuln: form.vuln, v_ratio: form.vRatio, power_out: form.powerOut,
-            roles: form.roles, backup: form.backup, ext: form.ext,
-            timeline: form.timeline, ev1: form.ev1, ev2: form.ev2,
-            route_note: form.routeNote, kpis: form.kpis, target_t: form.targetT,
-            debrief: form.debrief, behavior: form.behavior,
-          })
-        });
+        const { error } = await supabase.from("drill_formats")
+          .insert({ ...payload, user_id: session.user.id, name });
+        if (error) throw error;
       }
       setQuickMsg("saved");
       loadFormats();
@@ -572,35 +526,17 @@ export default function App() {
     if (!fmt) return;
     setFmtSaving(true);
     try {
-      await supaFetch(`/rest/v1/drill_formats?id=eq.${id}`, {
-        method:"PATCH",
-        token: session.token,
-        headers:{ "Prefer":"return=minimal" },
-        body: JSON.stringify({
-          name:       editingFmt?.name || fmt.name,
-          org_name:   form.orgName,
-          org_type:   form.orgType,
-          drill_time: form.drillTime,
-          drill_num:  form.drillNum,
-          d1:         form.d1,
-          d2:         form.d2,
-          bias:       form.bias,
-          vuln:       form.vuln,
-          v_ratio:    form.vRatio,
-          power_out:  form.powerOut,
-          roles:      form.roles,
-          backup:     form.backup,
-          ext:        form.ext,
-          timeline:   form.timeline,
-          ev1:        form.ev1,
-          ev2:        form.ev2,
-          route_note: form.routeNote,
-          kpis:       form.kpis,
-          target_t:   form.targetT,
-          debrief:    form.debrief,
-          behavior:   form.behavior,
-        })
-      });
+      const { error } = await supabase.from("drill_formats").update({
+        name: editingFmt?.name || fmt.name,
+        org_name: form.orgName, org_type: form.orgType, drill_time: form.drillTime,
+        drill_num: form.drillNum, d1: form.d1, d2: form.d2, bias: form.bias,
+        vuln: form.vuln, v_ratio: form.vRatio, power_out: form.powerOut,
+        roles: form.roles, backup: form.backup, ext: form.ext,
+        timeline: form.timeline, ev1: form.ev1, ev2: form.ev2,
+        route_note: form.routeNote, kpis: form.kpis, target_t: form.targetT,
+        debrief: form.debrief, behavior: form.behavior,
+      }).eq("id", id);
+      if (error) throw error;
       setFmtMsg("更新しました");
       setEditingFmt(null);
       loadFormats();
@@ -612,10 +548,8 @@ export default function App() {
   async function deleteFormat(id) {
     if (!window.confirm("このフォーマットを削除しますか？")) return;
     try {
-      await supaFetch(`/rest/v1/drill_formats?id=eq.${id}`, {
-        method:"DELETE",
-        token: session.token,
-      });
+      const { error } = await supabase.from("drill_formats").delete().eq("id", id);
+      if (error) throw error;
       loadFormats();
     } catch(e) { alert("削除失敗: " + e.message); }
   }
