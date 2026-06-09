@@ -513,21 +513,21 @@ export default function App() {
 
       {/* プログレス */}
       <div className="mb-5">
-        <div className="flex justify-between text-xs text-gray-400 mb-1.5">
-          <span className="font-medium text-gray-600">{STEPS[step]}</span>
-          <span>{step+1} / {STEPS.length}</span>
+        <div className="flex justify-between text-sm mb-2">
+          <span className="font-semibold text-gray-700">{STEPS[step]}</span>
+          <span className="font-medium text-gray-500">{step+1} / {STEPS.length}</span>
         </div>
-        <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
-          <div className="h-full bg-sky-400 rounded-full transition-all duration-300"
+        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+          <div className="h-full bg-sky-500 rounded-full transition-all duration-300"
             style={{width:`${((step+1)/STEPS.length)*100}%`}} />
         </div>
       </div>
 
       {/* ── Step 0 ── */}
       {step===0&&<div>
-        <div className="text-xs text-gray-400 uppercase tracking-widest mb-1">Step 1 / 7</div>
-        <div className="text-lg font-semibold mb-1">組織・実施概要</div>
-        <div className="text-sm text-gray-500 mb-4 leading-relaxed">どんな組織でも使える汎用フォーマット。組織種別に応じて設問が最適化されます。</div>
+        <div className="text-sm font-medium text-sky-500 mb-1.5">Step 1 / 7</div>
+        <div className="text-xl font-bold text-gray-900 mb-1.5">組織・実施概要</div>
+        <div className="text-sm text-gray-500 mb-5 leading-relaxed">どんな組織でも使える汎用フォーマット。組織種別に応じて設問が最適化されます。</div>
         <Fld label="組織名・施設名" required><Inp value={form.orgName} onChange={e=>set("orgName",e.target.value)} placeholder="例：○○保育園、△△自治会、□□株式会社"/></Fld>
         <div className="grid grid-cols-2 gap-3">
           <Fld label="訓練実施日" required><Inp type="date" value={form.drillDate} onChange={e=>set("drillDate",e.target.value)}/></Fld>
@@ -555,9 +555,9 @@ export default function App() {
 
       {/* ── Step 1 ── */}
       {step===1&&<div>
-        <div className="text-xs text-gray-400 uppercase tracking-widest mb-1">Step 2 / 7</div>
-        <div className="text-lg font-semibold mb-1">複合災害シナリオ</div>
-        <div className="text-sm text-gray-500 mb-4 leading-relaxed">連鎖する複合災害を想定することが減災教育2.0の核心です。</div>
+        <div className="text-sm font-medium text-sky-500 mb-1.5">Step 2 / 7</div>
+        <div className="text-xl font-bold text-gray-900 mb-1.5">複合災害シナリオ</div>
+        <div className="text-sm text-gray-500 mb-5 leading-relaxed">連鎖する複合災害を想定することが減災教育2.0の核心です。</div>
         <Note><strong className="text-gray-800">複合災害とは：</strong>地震→津波・火災・停電・断水が同時多発する状況。乳幼児環境では「避難＋授乳＋保温」が同時に必要になります。</Note>
         <Fld label="第一次災害（トリガー）" required>
           <div className="flex flex-wrap gap-2">
@@ -585,9 +585,9 @@ export default function App() {
 
       {/* ── Step 2 ── */}
       {step===2&&<div>
-        <div className="text-xs text-gray-400 uppercase tracking-widest mb-1">Step 3 / 7</div>
-        <div className="text-lg font-semibold mb-1">要配慮者への個別対応計画</div>
-        <div className="text-sm text-gray-500 mb-4 leading-relaxed">「平均的な大人」を前提にしない設計。減災教育2.0の核心部分です。</div>
+        <div className="text-sm font-medium text-sky-500 mb-1.5">Step 3 / 7</div>
+        <div className="text-xl font-bold text-gray-900 mb-1.5">要配慮者への個別対応計画</div>
+        <div className="text-sm text-gray-500 mb-5 leading-relaxed">「平均的な大人」を前提にしない設計。減災教育2.0の核心部分です。</div>
         <Fld label="施設・組織内の要配慮者">
           <div className="grid grid-cols-2 gap-1.5">
             {[["乳児（0〜1歳）","抱っこ・授乳・体温調節が必要"],["1〜3歳児","自力避難不可・パニックしやすい"],["妊産婦","移動速度・姿勢に配慮"],["高齢者（自力移動困難）","車椅子・歩行補助器具の確保"],["身体障害者","器具ごとの経路確認が必要"],["医療的ケア児・者","停電時の機器・薬対応が必須"],["知的・精神障害者","急変・パニック時の個別計画"],["外国人・日本語非対応","多言語・絵示サイン対応"]].map(([v,s])=>(
@@ -608,9 +608,9 @@ export default function App() {
 
       {/* ── Step 3 ── */}
       {step===3&&<div>
-        <div className="text-xs text-gray-400 uppercase tracking-widest mb-1">Step 4 / 7</div>
-        <div className="text-lg font-semibold mb-1">訓練スタッフの役割分担</div>
-        <div className="text-sm text-gray-500 mb-4 leading-relaxed">人事異動・欠席時のバックアップまで設計します。</div>
+        <div className="text-sm font-medium text-sky-500 mb-1.5">Step 4 / 7</div>
+        <div className="text-xl font-bold text-gray-900 mb-1.5">訓練スタッフの役割分担</div>
+        <div className="text-sm text-gray-500 mb-5 leading-relaxed">人事異動・欠席時のバックアップまで設計します。</div>
         <Fld label="役割と担当者">
           {form.roles.map((r,i)=>(
             <div key={i} className="grid grid-cols-2 gap-2 mb-2">
@@ -640,9 +640,9 @@ export default function App() {
 
       {/* ── Step 4 ── */}
       {step===4&&<div>
-        <div className="text-xs text-gray-400 uppercase tracking-widest mb-1">Step 5 / 7</div>
-        <div className="text-lg font-semibold mb-1">当日のタイムスケジュール</div>
-        <div className="text-sm text-gray-500 mb-4 leading-relaxed">事前→発生時→事後の3段階。担当者まで明記します。</div>
+        <div className="text-sm font-medium text-sky-500 mb-1.5">Step 5 / 7</div>
+        <div className="text-xl font-bold text-gray-900 mb-1.5">当日のタイムスケジュール</div>
+        <div className="text-sm text-gray-500 mb-5 leading-relaxed">事前→発生時→事後の3段階。担当者まで明記します。</div>
         <Fld label="タイムライン（時刻 / 内容 / 担当）">
           <div className="grid grid-cols-[58px_1fr_80px] gap-1.5 mb-1 text-xs text-gray-400">
             <span>時刻</span><span>内容</span><span>担当</span>
@@ -666,9 +666,9 @@ export default function App() {
 
       {/* ── Step 5 ── */}
       {step===5&&<div>
-        <div className="text-xs text-gray-400 uppercase tracking-widest mb-1">Step 6 / 7</div>
-        <div className="text-lg font-semibold mb-1">訓練評価と行動変容の記録</div>
-        <div className="text-sm text-gray-500 mb-4 leading-relaxed">「訓練をやった」で終わらせないためのPDCA設計です。</div>
+        <div className="text-sm font-medium text-sky-500 mb-1.5">Step 6 / 7</div>
+        <div className="text-xl font-bold text-gray-900 mb-1.5">訓練評価と行動変容の記録</div>
+        <div className="text-sm text-gray-500 mb-5 leading-relaxed">「訓練をやった」で終わらせないためのPDCA設計です。</div>
         <Fld label="計測・記録する指標（複数選択可）">
           <div className="grid grid-cols-2 gap-1.5">
             {[["避難完了時間（全員）","文科省推奨。目標タイムを設定"],["要配慮者の避難完了時間","一般との差を可視化"],["安否確認完了時間","点呼から全員確認まで"],["前後アンケート（意識変容）","知識・意識・行動意図の変化"],["行動観察記録","担当者がリアルタイム記録"],["写真・動画記録","振り返りワークの素材に"]].map(([v,s])=>(
@@ -695,7 +695,7 @@ export default function App() {
 
       {/* ── Step 6: 確認 ── */}
       {step===6&&<div>
-        <div className="text-xs text-gray-400 uppercase tracking-widest mb-1">Step 7 / 7</div>
+        <div className="text-sm font-medium text-sky-500 mb-1.5">Step 7 / 7</div>
         <div className="text-lg font-semibold mb-4">入力内容の確認</div>
         {[
           {title:"基本情報",rows:[["組織名",form.orgName||"—"],["訓練日・時間帯",(form.drillDate?form.drillDate.replace(/-/g,"/"):"—")+(form.drillTime?" / "+form.drillTime:"")],["種別・回数",(form.orgType||"—")+(form.drillNum?" / "+form.drillNum:"")],["参加人数・責任者",(form.pcount?form.pcount+"名":"—")+(form.resp?" / "+form.resp:"")]]},
