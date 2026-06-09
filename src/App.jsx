@@ -3,7 +3,6 @@ import { useState, useEffect, useCallback } from "react";
 // ── Supabase設定 ─────────────────────────────────────
 const SUPA_URL  = "https://fuggbtoovpjqwudiqkvq.supabase.co";
 const SUPA_KEY  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ1Z2didG9vdnBqcXd1ZGlxa3ZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5ODk0NTYsImV4cCI6MjA5NjU2NTQ1Nn0.gQj6mefELZm-pzNyNDNhEq0yL2p2AkAqg5H7XSIVLWI";
-const NOTION_DS = "21e8c272-4c3a-4c3e-bacb-409ed51da0e3";
 
 async function supaFetch(path, opts = {}) {
   const res = await fetch(`${SUPA_URL}${path}`, {
@@ -96,25 +95,288 @@ const Spinner = () => (
   </svg>
 );
 
-// ── Notion登録 ────────────────────────────────────────
-async function saveToNotion(form) {
-  const roles = form.roles.filter(r=>r.name).map(r=>`${r.role}：${r.name}`).join("、");
-  const tl = form.timeline.filter(t=>t.time&&t.content)
-    .map(t=>`${t.time} ${t.content}${t.actor?`（${t.actor}）`:""}`).join("\n");
 
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({
-      model:"claude-sonnet-4-20250514",
-      max_tokens:800,
-      system:`あなたはNotionのMCPツールを使うアシスタントです。data_source_id「${NOTION_DS}」に避難訓練計画を1件登録してください。`,
-      messages:[{role:"user",content:`組織名:${form.orgName}\n訓練日:${form.drillDate}\n時間帯:${form.drillTime}\n組織種別:${form.orgType}\n実施回数:${form.drillNum}\n参加人数:${form.pcount}\n責任者:${form.resp}\n第一次災害:${form.d1}\n二次災害:${JSON.stringify(form.d2)}\n要配慮者:${JSON.stringify(form.vuln)}\nシナリオ:${form.scenario}\n一次避難:${form.ev1}\n二次避難:${form.ev2}\n役割:${roles}\nタイムライン:${tl}\n行動変容:${form.behavior}`}],
-      mcp_servers:[{type:"url",url:"https://mcp.notion.com/mcp",name:"notion-mcp"}]
-    })
-  });
-  if (!res.ok) throw new Error("Notion API error");
-  return true;
+
+// ── ファイルエクスポート関数 ──────────────────────────
+
+function buildDocText(form) {
+  const roles = form.roles.filter(r=>r.name).map(r=>`${r.role}：${r.name}`).join("\n");
+  const tl = form.timeline.filter(t=>t.time&&t.content)
+    .map(t=>`  ${t.time}  ${t.content}${t.actor?`（${t.actor}）`:""}`).join("\n");
+  const d = form.drillDate ? form.drillDate.replace(/-/g,"/") : "未入力";
+  return `避難訓練計画書
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+powered by 減災教育普及協会
+
+【1. 基本情報】
+組織名　　　：${form.orgName || "未入力"}
+訓練日　　　：${d}　${form.drillTime || ""}
+組織種別　　：${form.orgType || "未入力"}
+実施回数　　：${form.drillNum || "未入力"}
+参加人数　　：${form.pcount ? form.pcount+"名" : "未入力"}
+訓練責任者　：${form.resp || "未入力"}
+
+【2. 複合災害シナリオ】
+第一次災害　：${form.d1 || "未入力"}
+二次災害　　：${form.d2.length ? form.d2.join("・") : "単独"}
+訓練シナリオ：${form.scenario || "未設定"}
+バイアス対策：${form.bias.length ? form.bias.join("、") : "未設定"}
+
+【3. 要配慮者対応計画】
+要配慮者　　：${form.vuln.length ? form.vuln.join("・") : "なし"}
+専任比率　　：${form.vRatio || "未設定"}
+停電時対応　：${form.powerOut || "未設定"}
+
+【4. 役割分担】
+${roles || "（未入力）"}
+バックアップ：${form.backup || "未設定"}
+外部連携　　：${form.ext.length ? form.ext.join("・") : "なし"}
+
+【5. タイムライン】
+${tl}
+一次避難場所：${form.ev1 || "未入力"}
+二次避難場所：${form.ev2 || "未入力"}
+経路メモ　　：${form.routeNote || "なし"}
+
+【6. 評価・PDCAサイクル】
+計測指標　　：${form.kpis.length ? form.kpis.join("・") : "未設定"}
+目標タイム　：${form.targetT || "未設定"}　前回実績：${form.prevT || "なし"}
+振り返り方法：${form.debrief || "未設定"}
+前回の課題　：${form.prevIssue || "なし"}
+行動変容目標：${form.behavior || "未設定"}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+減災教育普及協会　https://gensai.or.jp　info@gensai.or.jp
+`;
+}
+
+// Word（.doc）ダウンロード：HTMLをWord互換形式で出力
+function downloadWord(form) {
+  const roles = form.roles.filter(r=>r.name).map(r=>`<tr><td>${r.role}</td><td>${r.name}</td></tr>`).join("");
+  const tl = form.timeline.filter(t=>t.time&&t.content)
+    .map(t=>`<tr><td>${t.time}</td><td>${t.content}</td><td>${t.actor||""}</td></tr>`).join("");
+  const d = form.drillDate ? form.drillDate.replace(/-/g,"/") : "未入力";
+
+  const html = `
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="UTF-8">
+<style>
+  body { font-family: "MS Gothic","Hiragino Kaku Gothic ProN",sans-serif; font-size:10.5pt; margin:2cm; }
+  h1 { font-size:16pt; color:#0ea5e9; border-bottom:2px solid #0ea5e9; padding-bottom:4px; }
+  h2 { font-size:11pt; color:#0369a1; margin-top:14pt; border-left:3px solid #0ea5e9; padding-left:6px; }
+  table { border-collapse:collapse; width:100%; margin:6pt 0; }
+  td,th { border:1px solid #cbd5e1; padding:4pt 6pt; font-size:10pt; }
+  th { background:#f0f9ff; font-weight:bold; }
+  .label { color:#64748b; width:110px; }
+  .footer { font-size:8pt; color:#94a3b8; margin-top:24pt; border-top:1px solid #e2e8f0; padding-top:6pt; }
+</style></head>
+<body>
+<h1>避難訓練計画書</h1>
+<p style="font-size:9pt;color:#94a3b8;">powered by 減災教育普及協会</p>
+
+<h2>1. 基本情報</h2>
+<table>
+  <tr><td class="label">組織名</td><td>${form.orgName||"未入力"}</td><td class="label">訓練日</td><td>${d} ${form.drillTime||""}</td></tr>
+  <tr><td class="label">組織種別</td><td>${form.orgType||"未入力"}</td><td class="label">実施回数</td><td>${form.drillNum||"未入力"}</td></tr>
+  <tr><td class="label">参加人数</td><td>${form.pcount?form.pcount+"名":"未入力"}</td><td class="label">訓練責任者</td><td>${form.resp||"未入力"}</td></tr>
+</table>
+
+<h2>2. 複合災害シナリオ</h2>
+<table>
+  <tr><td class="label">第一次災害</td><td>${form.d1||"未入力"}</td></tr>
+  <tr><td class="label">二次災害</td><td>${form.d2.length?form.d2.join("・"):"単独"}</td></tr>
+  <tr><td class="label">訓練シナリオ</td><td>${form.scenario||"未設定"}</td></tr>
+  <tr><td class="label">バイアス対策</td><td>${form.bias.length?form.bias.join("、"):"未設定"}</td></tr>
+</table>
+
+<h2>3. 要配慮者対応計画</h2>
+<table>
+  <tr><td class="label">要配慮者</td><td>${form.vuln.length?form.vuln.join("・"):"なし"}</td></tr>
+  <tr><td class="label">専任配置比率</td><td>${form.vRatio||"未設定"}</td></tr>
+  <tr><td class="label">停電時対応</td><td>${form.powerOut||"未設定"}</td></tr>
+</table>
+
+<h2>4. 役割分担</h2>
+<table>
+  <tr><th>役割</th><th>担当者</th></tr>
+  ${roles||"<tr><td colspan=2>未入力</td></tr>"}
+</table>
+<p style="font-size:10pt;"><b>バックアップ体制：</b>${form.backup||"未設定"}　<b>外部連携：</b>${form.ext.length?form.ext.join("・"):"なし"}</p>
+
+<h2>5. タイムライン</h2>
+<table>
+  <tr><th style="width:60px">時刻</th><th>内容</th><th style="width:80px">担当</th></tr>
+  ${tl||"<tr><td colspan=3>未入力</td></tr>"}
+</table>
+<p style="font-size:10pt;"><b>一次避難場所：</b>${form.ev1||"未入力"}　<b>二次避難場所：</b>${form.ev2||"未入力"}</p>
+${form.routeNote?`<p style="font-size:10pt;"><b>経路メモ：</b>${form.routeNote}</p>`:""}
+
+<h2>6. 評価・PDCAサイクル</h2>
+<table>
+  <tr><td class="label">計測指標</td><td>${form.kpis.length?form.kpis.join("・"):"未設定"}</td></tr>
+  <tr><td class="label">目標タイム</td><td>${form.targetT||"未設定"}　（前回実績：${form.prevT||"なし"}）</td></tr>
+  <tr><td class="label">振り返り方法</td><td>${form.debrief||"未設定"}</td></tr>
+  <tr><td class="label">前回からの課題</td><td>${form.prevIssue||"なし"}</td></tr>
+  <tr><td class="label">行動変容目標</td><td>${form.behavior||"未設定"}</td></tr>
+</table>
+
+<div class="footer">減災教育普及協会　https://gensai.or.jp　info@gensai.or.jp　TEL: 045-532-8937</div>
+</body></html>`;
+
+  const blob = new Blob([html], { type:"application/msword;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `避難訓練計画書_${form.orgName||"未入力"}_${(form.drillDate||"").replace(/-/g,"")}.doc`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Excel（.xls）ダウンロード
+function downloadExcel(form) {
+  const d = form.drillDate ? form.drillDate.replace(/-/g,"/") : "未入力";
+  const roles = form.roles.filter(r=>r.name);
+  const tl = form.timeline.filter(t=>t.time&&t.content);
+
+  const rows = [
+    ["避難訓練計画書","","",""],
+    ["powered by 減災教育普及協会","","",""],
+    ["","","",""],
+    ["【基本情報】","","",""],
+    ["組織名",form.orgName||"","訓練日",d+" "+(form.drillTime||"")],
+    ["組織種別",form.orgType||"","実施回数",form.drillNum||""],
+    ["参加人数",form.pcount?form.pcount+"名":"","訓練責任者",form.resp||""],
+    ["","","",""],
+    ["【複合災害シナリオ】","","",""],
+    ["第一次災害",form.d1||"","二次災害",form.d2.join("・")||"単独"],
+    ["シナリオ",form.scenario||"","",""],
+    ["バイアス対策",form.bias.join("、")||"未設定","",""],
+    ["","","",""],
+    ["【要配慮者対応計画】","","",""],
+    ["要配慮者",form.vuln.join("・")||"なし","専任比率",form.vRatio||"未設定"],
+    ["停電時対応",form.powerOut||"未設定","",""],
+    ["","","",""],
+    ["【役割分担】","","",""],
+    ["役割","担当者","バックアップ",form.backup||"未設定"],
+    ...roles.map(r=>[r.role,r.name,"",""]),
+    ["外部連携",form.ext.join("・")||"なし","",""],
+    ["","","",""],
+    ["【タイムライン】","","",""],
+    ["時刻","内容","担当",""],
+    ...tl.map(t=>[t.time,t.content,t.actor||"",""]),
+    ["一次避難場所",form.ev1||"","二次避難場所",form.ev2||""],
+    ["","","",""],
+    ["【評価・PDCAサイクル】","","",""],
+    ["計測指標",form.kpis.join("・")||"未設定","",""],
+    ["目標タイム",form.targetT||"未設定","前回実績",form.prevT||"なし"],
+    ["振り返り方法",form.debrief||"未設定","",""],
+    ["前回の課題",form.prevIssue||"なし","",""],
+    ["行動変容目標",form.behavior||"未設定","",""],
+    ["","","",""],
+    ["減災教育普及協会","https://gensai.or.jp","info@gensai.or.jp",""],
+  ];
+
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+ xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
+<Styles>
+  <Style ss:ID="h1"><Font ss:Bold="1" ss:Size="14" ss:Color="#0ea5e9"/></Style>
+  <Style ss:ID="h2"><Font ss:Bold="1" ss:Color="#0369a1"/><Interior ss:Color="#f0f9ff" ss:Pattern="Solid"/></Style>
+  <Style ss:ID="label"><Font ss:Bold="1" ss:Color="#475569"/></Style>
+</Styles>
+<Worksheet ss:Name="避難訓練計画書">
+<Table>
+${rows.map((row,ri)=>`<Row>${row.map((cell,ci)=>{
+  const st = ri===0?"h1":ri===3||ri===8||ri===13||ri===17||ri===23||ri===28?"h2":ci===0&&ri>3?"label":"";
+  return `<Cell${st?` ss:StyleID="${st}"`:""}><Data ss:Type="String">${String(cell).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")}</Data></Cell>`;
+}).join("")}</Row>`).join("")}
+</Table>
+</Worksheet>
+</Workbook>`;
+
+  const blob = new Blob([xml], { type:"application/vnd.ms-excel;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `避難訓練計画書_${form.orgName||"未入力"}_${(form.drillDate||"").replace(/-/g,"")}.xls`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// PDF（印刷ダイアログ経由）
+function downloadPDF(form) {
+  const roles = form.roles.filter(r=>r.name).map(r=>`<tr><td>${r.role}</td><td>${r.name}</td></tr>`).join("");
+  const tl = form.timeline.filter(t=>t.time&&t.content)
+    .map(t=>`<tr><td>${t.time}</td><td>${t.content}</td><td>${t.actor||""}</td></tr>`).join("");
+  const d = form.drillDate ? form.drillDate.replace(/-/g,"/") : "未入力";
+
+  const html = `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">
+<style>
+  @media print { @page { margin:1.5cm; size:A4; } body { margin:0; } }
+  body { font-family:"Hiragino Kaku Gothic ProN","MS Gothic",sans-serif; font-size:10pt; color:#1e293b; }
+  h1 { font-size:15pt; color:#0ea5e9; border-bottom:2px solid #0ea5e9; padding-bottom:4px; margin-bottom:2px; }
+  .sub { font-size:8pt; color:#94a3b8; margin-bottom:12pt; }
+  h2 { font-size:10pt; font-weight:bold; color:#0369a1; background:#f0f9ff; border-left:3px solid #0ea5e9; padding:3px 8px; margin:12pt 0 4pt; }
+  table { border-collapse:collapse; width:100%; margin-bottom:6pt; }
+  td,th { border:1px solid #cbd5e1; padding:3pt 5pt; font-size:9.5pt; }
+  th { background:#f8fafc; font-weight:bold; }
+  .label { color:#64748b; width:100px; font-weight:bold; }
+  .footer { font-size:7.5pt; color:#94a3b8; margin-top:16pt; border-top:1px solid #e2e8f0; padding-top:4pt; text-align:center; }
+</style></head><body>
+<h1>避難訓練計画書</h1>
+<div class="sub">powered by 減災教育普及協会</div>
+
+<h2>1. 基本情報</h2>
+<table>
+  <tr><td class="label">組織名</td><td>${form.orgName||""}</td><td class="label">訓練日</td><td>${d} ${form.drillTime||""}</td></tr>
+  <tr><td class="label">組織種別</td><td>${form.orgType||""}</td><td class="label">実施回数</td><td>${form.drillNum||""}</td></tr>
+  <tr><td class="label">参加人数</td><td>${form.pcount?form.pcount+"名":""}</td><td class="label">訓練責任者</td><td>${form.resp||""}</td></tr>
+</table>
+
+<h2>2. 複合災害シナリオ</h2>
+<table>
+  <tr><td class="label">第一次災害</td><td>${form.d1||""}</td><td class="label">二次災害</td><td>${form.d2.join("・")||"単独"}</td></tr>
+  <tr><td class="label">シナリオ</td><td colspan="3">${form.scenario||"未設定"}</td></tr>
+  <tr><td class="label">バイアス対策</td><td colspan="3">${form.bias.join("、")||"未設定"}</td></tr>
+</table>
+
+<h2>3. 要配慮者対応計画</h2>
+<table>
+  <tr><td class="label">要配慮者</td><td>${form.vuln.join("・")||"なし"}</td><td class="label">専任比率</td><td>${form.vRatio||""}</td></tr>
+  <tr><td class="label">停電時対応</td><td colspan="3">${form.powerOut||"未設定"}</td></tr>
+</table>
+
+<h2>4. 役割分担</h2>
+<table>
+  <tr><th>役割</th><th>担当者</th></tr>
+  ${roles||"<tr><td colspan=2>—</td></tr>"}
+</table>
+<p style="font-size:9pt">バックアップ体制：${form.backup||"未設定"}　外部連携：${form.ext.join("・")||"なし"}</p>
+
+<h2>5. タイムライン</h2>
+<table>
+  <tr><th style="width:55px">時刻</th><th>内容</th><th style="width:70px">担当</th></tr>
+  ${tl||"<tr><td colspan=3>—</td></tr>"}
+</table>
+<p style="font-size:9pt">一次避難：${form.ev1||"—"}　二次避難：${form.ev2||"—"}　${form.routeNote?"経路メモ："+form.routeNote:""}</p>
+
+<h2>6. 評価・PDCAサイクル</h2>
+<table>
+  <tr><td class="label">計測指標</td><td colspan="3">${form.kpis.join("・")||"未設定"}</td></tr>
+  <tr><td class="label">目標タイム</td><td>${form.targetT||"未設定"}</td><td class="label">前回実績</td><td>${form.prevT||"なし"}</td></tr>
+  <tr><td class="label">振り返り</td><td colspan="3">${form.debrief||"未設定"}</td></tr>
+  <tr><td class="label">前回の課題</td><td colspan="3">${form.prevIssue||"なし"}</td></tr>
+  <tr><td class="label">行動変容目標</td><td colspan="3">${form.behavior||"未設定"}</td></tr>
+</table>
+
+<div class="footer">減災教育普及協会　https://gensai.or.jp　info@gensai.or.jp　TEL: 045-532-8937</div>
+</body></html>`;
+
+  const w = window.open("","_blank","width=800,height=900");
+  w.document.write(html);
+  w.document.close();
+  w.onload = () => { w.focus(); w.print(); };
 }
 
 // ── メインアプリ ──────────────────────────────────────
@@ -127,9 +389,7 @@ export default function App() {
 
   const [form, setForm]         = useState(BLANK_FORM);
   const [step, setStep]         = useState(0);
-  const [saving, setSaving]     = useState(false);
   const [saved, setSaved]       = useState(false);
-  const [saveErr, setSaveErr]   = useState("");
 
   const [formats, setFormats]   = useState([]);
   const [fmtLoading, setFmtLoading] = useState(false);
@@ -317,11 +577,8 @@ export default function App() {
     return true;
   }
 
-  async function handleComplete() {
-    setSaving(true); setSaveErr("");
-    try { await saveToNotion(form); setSaved(true); }
-    catch(e) { setSaveErr("Notion登録エラー: "+e.message); }
-    finally { setSaving(false); }
+  function handleComplete() {
+    setSaved(true);
   }
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -468,25 +725,50 @@ export default function App() {
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // ── 完了画面 ──
   if (saved) return (
-    <div className="max-w-lg mx-auto p-6 text-center">
-      <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-        <span className="text-3xl">✓</span>
+    <div className="max-w-lg mx-auto p-6">
+      <div className="text-center mb-6">
+        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <span className="text-3xl">✓</span>
+        </div>
+        <h2 className="text-xl font-semibold mb-1">計画書が完成しました</h2>
+        <p className="text-sm text-gray-500">形式を選んでダウンロードしてください</p>
       </div>
-      <h2 className="text-xl font-semibold mb-1">Notionに登録しました</h2>
-      <p className="text-sm text-gray-500 mb-6">避難訓練 計画台帳（Plan）に1件追加されました</p>
-      <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 text-left mb-5 text-sm space-y-1">
-        <div className="flex gap-2"><span className="text-gray-400 w-24">組織名</span><span className="font-medium">{form.orgName}</span></div>
+
+      <div className="bg-gray-50 rounded-xl border border-gray-200 p-4 mb-6 text-sm space-y-1">
+        <div className="flex gap-2"><span className="text-gray-400 w-24">組織名</span><span className="font-medium text-gray-800">{form.orgName}</span></div>
         <div className="flex gap-2"><span className="text-gray-400 w-24">訓練日</span><span>{form.drillDate?.replace(/-/g,"/")}</span></div>
         <div className="flex gap-2"><span className="text-gray-400 w-24">第一次災害</span><span>{form.d1}</span></div>
-        <div className="flex gap-2"><span className="text-gray-400 w-24">ステータス</span><span className="inline-block px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full text-xs">計画中</span></div>
+        <div className="flex gap-2"><span className="text-gray-400 w-24">要配慮者</span><span>{form.vuln.length?form.vuln.join("・"):"なし"}</span></div>
       </div>
-      <div className="flex flex-col gap-2 items-center">
-        <a href="https://www.notion.so/375676ee6b7e80599dbed6d7c91dbc34" target="_blank" rel="noopener noreferrer"
-          className="bg-gray-900 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-700 w-56 text-center">
-          Notionで確認する →
-        </a>
+
+      <div className="grid grid-cols-3 gap-3 mb-6">
+        <button onClick={()=>downloadWord(form)}
+          className="flex flex-col items-center gap-2 p-4 bg-white border-2 border-blue-200 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-all group">
+          <span className="text-3xl">📄</span>
+          <span className="text-sm font-semibold text-blue-700">Word</span>
+          <span className="text-xs text-gray-400">.doc形式</span>
+        </button>
+        <button onClick={()=>downloadExcel(form)}
+          className="flex flex-col items-center gap-2 p-4 bg-white border-2 border-green-200 rounded-xl hover:border-green-400 hover:bg-green-50 transition-all group">
+          <span className="text-3xl">📊</span>
+          <span className="text-sm font-semibold text-green-700">Excel</span>
+          <span className="text-xs text-gray-400">.xls形式</span>
+        </button>
+        <button onClick={()=>downloadPDF(form)}
+          className="flex flex-col items-center gap-2 p-4 bg-white border-2 border-red-200 rounded-xl hover:border-red-400 hover:bg-red-50 transition-all group">
+          <span className="text-3xl">📋</span>
+          <span className="text-sm font-semibold text-red-700">PDF</span>
+          <span className="text-xs text-gray-400">印刷して保存</span>
+        </button>
+      </div>
+
+      <p className="text-xs text-center text-gray-400 mb-5">PDFは印刷ダイアログで「PDFとして保存」を選択してください</p>
+
+      <div className="flex justify-center">
         <button onClick={()=>{setForm(BLANK_FORM);setStep(0);setSaved(false);}}
-          className="text-sm text-gray-400 mt-2 hover:text-gray-600">新しい計画を作成する</button>
+          className="text-sm text-gray-400 border border-gray-200 px-5 py-2 rounded-lg hover:bg-gray-50">
+          新しい計画を作成する
+        </button>
       </div>
     </div>
   );
@@ -713,14 +995,13 @@ export default function App() {
         ))}
         <div className="mt-4 p-4 bg-gradient-to-br from-sky-50 to-indigo-50 rounded-xl border border-sky-200">
           <div className="flex items-start gap-3">
-            <div className="text-2xl">📋</div>
+            <div className="text-2xl">💾</div>
             <div>
-              <div className="text-sm font-medium text-gray-800 mb-1">Notionに自動登録されます</div>
-              <div className="text-xs text-gray-500 leading-relaxed">「計画書を完成させる」を押すと、Notion「避難訓練 計画台帳（Plan）」に1件登録されます。</div>
+              <div className="text-sm font-medium text-gray-800 mb-1">Word・Excel・PDFで保存できます</div>
+              <div className="text-xs text-gray-500 leading-relaxed">「計画書を完成させる」を押すと、3形式のダウンロード画面に進みます。</div>
             </div>
           </div>
         </div>
-        {saveErr&&<div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">{saveErr}</div>}
       </div>}
 
       {/* ナビゲーション */}
@@ -729,10 +1010,9 @@ export default function App() {
           ? <button onClick={()=>setStep(s=>s-1)} className="text-sm text-gray-500 border border-gray-200 px-4 py-2 rounded-lg hover:bg-gray-50">← 戻る</button>
           : <span/>}
         {isLast
-          ? <button onClick={()=>{if(!saving)handleComplete();}} disabled={saving}
-              className={`flex items-center gap-2 text-sm text-white px-5 py-2.5 rounded-lg font-medium ${saving?"bg-gray-400 cursor-not-allowed":"bg-green-500 hover:bg-green-600"}`}>
-              {saving&&<Spinner/>}
-              {saving?"Notionに登録中...":"✓ 計画書をNotionに登録する"}
+          ? <button onClick={handleComplete}
+              className="flex items-center gap-2 text-sm text-white px-5 py-2.5 rounded-lg font-medium bg-green-500 hover:bg-green-600">
+              ✓ 計画書を完成させる
             </button>
           : <button onClick={()=>{if(validate())setStep(s=>s+1);}}
               className="text-sm text-white bg-sky-500 hover:bg-sky-600 px-5 py-2 rounded-lg font-medium">
