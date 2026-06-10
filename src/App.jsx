@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
+import { createClient } from "@supabase/supabase-js";
 
 // ── Supabase設定 ─────────────────────────────────────
-const SUPA_URL  = "https://fuggbtoovpjqwudiqkvq.supabase.co";
-const SUPA_KEY  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ1Z2didG9vdnBqcXd1ZGlxa3ZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5ODk0NTYsImV4cCI6MjA5NjU2NTQ1Nn0.gQj6mefELZm-pzNyNDNhEq0yL2p2AkAqg5H7XSIVLWI";
+const SUPA_URL = "https://fuggbtoovpjqwudiqkvq.supabase.co";
+const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ1Z2didG9vdnBqcXd1ZGlxa3ZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5ODk0NTYsImV4cCI6MjA5NjU2NTQ1Nn0.gQj6mefELZm-pzNyNDNhEq0yL2p2AkAqg5H7XSIVLWI";
+const supabase = createClient(SUPA_URL, SUPA_KEY);
 
 
 // ── デフォルト値 ──────────────────────────────────────
