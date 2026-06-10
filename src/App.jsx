@@ -1,10 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-// ── Supabase設定 ─────────────────────────────────────
+// ── Supabase設定（フォーマット保存用・認証なし）─────────
 const SUPA_URL = "https://fuggbtoovpjqwudiqkvq.supabase.co";
 const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ1Z2didG9vdnBqcXd1ZGlxa3ZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5ODk0NTYsImV4cCI6MjA5NjU2NTQ1Nn0.gQj6mefELZm-pzNyNDNhEq0yL2p2AkAqg5H7XSIVLWI";
 const supabase = createClient(SUPA_URL, SUPA_KEY);
+
+// ── 簡易パスワード認証 ────────────────────────────────
+const APP_PASSWORD = "1234";
 
 
 // ── デフォルト値 ──────────────────────────────────────
@@ -369,9 +372,9 @@ function downloadPDF(form) {
 
 // ── メインアプリ ──────────────────────────────────────
 export default function App() {
-  const [view, setView]         = useState("login");   // login | register | app | formats
-  const [session, setSession]   = useState(null);      // { token, user }
-  const [authForm, setAuthForm] = useState({ email:"", password:"" });
+  const [view, setView]         = useState("login");   // login | app | formats
+  const [session, setSession]   = useState(null);      // { user: { id, email } }
+  const [pwInput, setPwInput]   = useState("");
   const [authErr, setAuthErr]   = useState("");
   const [authLoading, setAuthLoading] = useState(false);
 
@@ -389,33 +392,19 @@ export default function App() {
   const [editingFmt, setEditingFmt] = useState(null); // format id being renamed
 
   // ── 認証 ──
-  async function doLogin() {
-    setAuthLoading(true); setAuthErr("");
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: authForm.email, password: authForm.password
-      });
-      if (error) throw error;
-      setSession({ token: data.session.access_token, user: data.user });
+  function doLogin() {
+    if (pwInput === APP_PASSWORD) {
+      setSession({ user: { id: "local", email: "local" } });
       setView("app");
-    } catch(e) { setAuthErr("メールアドレスまたはパスワードが正しくありません"); }
-    finally { setAuthLoading(false); }
-  }
-
-  async function doRegister() {
-    setAuthLoading(true); setAuthErr("");
-    try {
-      const { error } = await supabase.auth.signUp({
-        email: authForm.email, password: authForm.password
-      });
-      if (error) throw error;
-      setAuthErr("確認メールを送信しました。メールのリンクをクリックしてからログインしてください。");
-    } catch(e) { setAuthErr(e.message); }
-    finally { setAuthLoading(false); }
+      setAuthErr("");
+    } else {
+      setAuthErr("パスワードが正しくありません");
+    }
   }
 
   function doLogout() {
-    setSession(null); setView("login"); setForm(BLANK_FORM); setStep(0); setSaved(false);
+    setSession(null); setView("login"); setForm(BLANK_FORM);
+    setStep(0); setSaved(false); setPwInput(""); setAuthErr("");
   }
 
   // ── フォーマット一覧取得 ──
@@ -569,52 +558,34 @@ export default function App() {
     setSaved(true);
   }
 
+
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // ── 認証画面 ──
-  if (view==="login"||view==="register") {
-    const isReg = view==="register";
+  // ── ログイン画面 ──
+  if (view==="login") {
     return (
       <div className="min-h-screen bg-gradient-to-br from-sky-50 to-indigo-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 w-full max-w-sm p-8">
-          <div className="text-center mb-6">
-              <h1 className="text-lg font-semibold text-gray-900">避難訓練計画書フォーマット</h1>
+          <div className="text-center mb-8">
+            <h1 className="text-xl font-bold text-gray-900">避難訓練計画書フォーマット</h1>
             <p className="text-xs text-gray-400 mt-1">powered by 減災教育普及協会</p>
           </div>
-
-          <div className="flex rounded-lg border border-gray-200 mb-5 overflow-hidden text-sm">
-            <button onClick={()=>{setView("login");setAuthErr("");}}
-              className={`flex-1 py-2 transition-colors ${!isReg?"bg-sky-500 text-white font-medium":"text-gray-500 hover:bg-gray-50"}`}>
-              ログイン
-            </button>
-            <button onClick={()=>{setView("register");setAuthErr("");}}
-              className={`flex-1 py-2 transition-colors ${isReg?"bg-sky-500 text-white font-medium":"text-gray-500 hover:bg-gray-50"}`}>
-              新規登録
-            </button>
-          </div>
-
-          <div className="space-y-3">
-            <Inp type="email" placeholder="メールアドレス" value={authForm.email}
-              onChange={e=>setAuthForm(f=>({...f,email:e.target.value}))} />
-            <Inp type="password" placeholder="パスワード（8文字以上）" value={authForm.password}
-              onChange={e=>setAuthForm(f=>({...f,password:e.target.value}))}
-              onKeyDown={e=>e.key==="Enter"&&(isReg?doRegister():doLogin())} />
-          </div>
-
-          {authErr && (
-            <p className={`text-xs mt-3 ${authErr.includes("送信")||authErr.includes("確認")?"text-green-600":"text-red-500"}`}>
-              {authErr}
-            </p>
-          )}
-
-          <button onClick={isReg?doRegister:doLogin} disabled={authLoading}
-            className="w-full mt-4 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-60">
-            {authLoading&&<Spinner/>}
-            {isReg?"アカウントを作成する":"ログイン"}
+          <Inp
+            type="password"
+            placeholder="パスワードを入力"
+            value={pwInput}
+            onChange={e=>setPwInput(e.target.value)}
+            onKeyDown={e=>e.key==="Enter"&&doLogin()}
+          />
+          {authErr && <p className="text-xs mt-3 text-red-500">{authErr}</p>}
+          <button onClick={doLogin}
+            className="w-full mt-5 py-3 bg-sky-500 hover:bg-sky-600 text-white rounded-xl text-sm font-semibold transition-colors">
+            ログイン
           </button>
         </div>
       </div>
     );
   }
+
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // ── フォーマット管理画面 ──
